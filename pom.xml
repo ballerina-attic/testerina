@@ -72,7 +72,6 @@
                 <artifactId>jcommander</artifactId>
                 <version>${com.beust.jcommander.version}</version>
             </dependency>
-
         </dependencies>
     </dependencyManagement>
 
