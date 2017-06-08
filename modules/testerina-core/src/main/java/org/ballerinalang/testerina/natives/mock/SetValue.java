@@ -18,20 +18,9 @@
 package org.ballerinalang.testerina.natives.mock;
 
 import org.ballerinalang.bre.Context;
-import org.ballerinalang.model.BLangPackage;
-import org.ballerinalang.model.BLangProgram;
-import org.ballerinalang.model.BallerinaConnectorDef;
-import org.ballerinalang.model.Connector;
-import org.ballerinalang.model.ParameterDef;
-import org.ballerinalang.model.Service;
-import org.ballerinalang.model.expressions.BasicLiteral;
-import org.ballerinalang.model.expressions.ConnectorInitExpr;
-import org.ballerinalang.model.expressions.Expression;
-import org.ballerinalang.model.statements.VariableDefStmt;
 import org.ballerinalang.model.types.BType;
 import org.ballerinalang.model.types.TypeEnum;
 import org.ballerinalang.model.values.BConnector;
-import org.ballerinalang.model.values.BRefType;
 import org.ballerinalang.model.values.BValue;
 import org.ballerinalang.model.values.StructureType;
 import org.ballerinalang.natives.AbstractNativeFunction;
@@ -41,18 +30,15 @@ import org.ballerinalang.natives.annotations.BallerinaAnnotation;
 import org.ballerinalang.natives.annotations.BallerinaFunction;
 import org.ballerinalang.testerina.core.TesterinaRegistry;
 import org.ballerinalang.testerina.core.TesterinaUtils;
-import org.ballerinalang.util.codegen.AttributeInfo;
 import org.ballerinalang.util.codegen.ProgramFile;
 import org.ballerinalang.util.codegen.ServiceInfo;
 import org.ballerinalang.util.exceptions.BallerinaException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sun.security.pkcs11.wrapper.Constants;
 
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.Optional;
-import java.util.Queue;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -137,7 +123,7 @@ public class SetValue extends AbstractNativeFunction {
             throw new BallerinaException(COULD_NOT_FIND_MATCHING_CONNECTOR);
         }
 
-        //TODO: Find a better way to do this 
+        //TODO: Find a better way to do this
         BType[] fieldTypes = connector.getFieldTypes();
         int[] fieldTypeCount = new int[5];
 

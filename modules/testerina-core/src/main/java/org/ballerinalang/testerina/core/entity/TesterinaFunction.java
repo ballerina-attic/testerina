@@ -17,22 +17,12 @@
  */
 package org.ballerinalang.testerina.core.entity;
 
-import org.ballerinalang.bre.CallableUnitInfo;
 import org.ballerinalang.bre.Context;
-import org.ballerinalang.bre.StackFrame;
-import org.ballerinalang.bre.StackVarLocation;
-import org.ballerinalang.model.Function;
-import org.ballerinalang.model.SymbolName;
-import org.ballerinalang.model.expressions.Expression;
-import org.ballerinalang.model.expressions.FunctionInvocationExpr;
-import org.ballerinalang.model.expressions.VariableRefExpr;
 import org.ballerinalang.model.values.BValue;
 import org.ballerinalang.util.codegen.FunctionInfo;
 import org.ballerinalang.util.codegen.ProgramFile;
 import org.ballerinalang.util.exceptions.BallerinaException;
 import org.ballerinalang.util.program.BLangFunctions;
-
-import java.util.Arrays;
 
 /**
  * TesterinaFunction entity class

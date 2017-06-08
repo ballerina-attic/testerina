@@ -17,7 +17,6 @@
 */
 package org.ballerinalang.testerina.core;
 
-import org.ballerinalang.model.BLangProgram;
 import org.ballerinalang.util.codegen.ProgramFile;
 
 import java.util.ArrayList;
