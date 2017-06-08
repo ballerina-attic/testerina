@@ -28,6 +28,7 @@ import org.ballerinalang.natives.annotations.BallerinaAnnotation;
 import org.ballerinalang.natives.annotations.BallerinaFunction;
 import org.ballerinalang.natives.annotations.ReturnType;
 import org.ballerinalang.natives.connectors.BallerinaConnectorManager;
+import org.ballerinalang.services.MessageProcessor;
 import org.ballerinalang.services.dispatchers.DispatcherRegistry;
 import org.ballerinalang.services.dispatchers.http.Constants;
 import org.ballerinalang.testerina.core.TesterinaRegistry;
@@ -39,6 +40,7 @@ import org.ballerinalang.util.codegen.ServiceInfo;
 import org.ballerinalang.util.exceptions.BallerinaException;
 import org.ballerinalang.util.program.BLangFunctions;
 import org.wso2.carbon.messaging.ServerConnector;
+import org.wso2.carbon.messaging.exceptions.ServerConnectorException;
 import org.wso2.carbon.transport.http.netty.config.ListenerConfiguration;
 import org.wso2.carbon.transport.http.netty.listener.HTTPServerConnector;
 
@@ -115,14 +117,25 @@ public class StartService extends AbstractNativeFunction {
     }
 
     private void startService(ProgramFile programFile, ServiceInfo matchingService) {
+        BallerinaConnectorManager.getInstance().initialize(new MessageProcessor());
+
         Context bContext = new Context(programFile);
         bContext.initFunction = true;
+
         PackageInfo packageInfo = matchingService.getPackageInfo();
+        
         BLangFunctions.invokeFunction(programFile, packageInfo, packageInfo.getInitFunctionInfo(), bContext);
         BLangFunctions.invokeFunction(programFile, packageInfo, matchingService.getInitFunctionInfo(), bContext);
         DispatcherRegistry.getInstance().getServiceDispatchers().forEach((protocol, dispatcher) ->
                                                                                  dispatcher.serviceRegistered(
                                                                                          matchingService));
+
+        try {
+            List<ServerConnector> startedConnectors = BallerinaConnectorManager.getInstance()
+                    .startPendingConnectors();
+        } catch (ServerConnectorException e) {
+            throw new RuntimeException("error starting server connectors: " + e.getMessage(), e);
+        }
     }
 
     /**
@@ -145,11 +158,11 @@ public class StartService extends AbstractNativeFunction {
             String listenerInterface = Constants.DEFAULT_INTERFACE;
             String basePath = service.getName();
 
-            AnnotationAttachmentInfo annotation = service.getAnnotationAttachmentInfo(Constants.PROTOCOL_HTTP,
+            AnnotationAttachmentInfo annotation = service.getAnnotationAttachmentInfo(Constants.HTTP_PACKAGE_PATH,
                                                                                       Constants
                                                                                               .ANNOTATION_NAME_BASE_PATH);
             if (annotation != null) {
-                basePath = annotation.getAnnotationAttributeValue(Constants.BASE_PATH).getStringValue();
+                basePath = annotation.getAnnotationAttributeValue(Constants.VALUE_ATTRIBUTE).getStringValue();
             }
             if (basePath.startsWith("\"")) {
                 basePath = basePath.substring(1, basePath.length() - 1);
