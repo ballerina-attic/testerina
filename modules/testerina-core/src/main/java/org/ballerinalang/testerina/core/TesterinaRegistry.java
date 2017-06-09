@@ -40,7 +40,7 @@ public class TesterinaRegistry {
         return Collections.unmodifiableCollection(programFiles);
     }
 
-    public void addProgramFile(ProgramFile bLangProgram) {
-        programFiles.add(bLangProgram);
+    public void addProgramFile(ProgramFile programFile) {
+        programFiles.add(programFile);
     }
  }

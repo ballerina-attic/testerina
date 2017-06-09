@@ -69,8 +69,8 @@ public class BTestRunner {
         return new BLangProgramLoader().loadServiceProgramFile(programDirPath, sourceFilePath);
     }
 
-    private static void executeTestFunctions(ProgramFile[] bLangPrograms) {
-        TesterinaContext tFile = new TesterinaContext(bLangPrograms);
+    private static void executeTestFunctions(ProgramFile[] programFiles) {
+        TesterinaContext tFile = new TesterinaContext(programFiles);
         ArrayList<TesterinaFunction> testFunctions = tFile.getTestFunctions();
         ArrayList<TesterinaFunction> beforeTestFunctions = tFile.getBeforeTestFunctions();
         ArrayList<TesterinaFunction> afterTestFunctions = tFile.getAfterTestFunctions();

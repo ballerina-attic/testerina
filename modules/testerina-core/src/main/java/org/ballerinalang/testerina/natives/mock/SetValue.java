@@ -170,10 +170,10 @@ public class SetValue extends AbstractNativeFunction {
 
     private ServiceInfo getMatchingService(String serviceName) {
         Optional<ServiceInfo> matchingService = Optional.empty();
-        for (ProgramFile bLangProgram : TesterinaRegistry.getInstance().getProgramFiles()) {
-            // 1) First, we get the Service for the given serviceName from the original BLangProgram
-            matchingService = Arrays.stream(bLangProgram.getServicePackageNameList())
-                    .map(sName -> bLangProgram.getPackageInfo(sName).getServiceInfoList())
+        for (ProgramFile programFile : TesterinaRegistry.getInstance().getProgramFiles()) {
+            // 1) First, we get the Service for the given serviceName from the original ProgramFile
+            matchingService = Arrays.stream(programFile.getServicePackageNameList())
+                    .map(sName -> programFile.getPackageInfo(sName).getServiceInfoList())
                     .flatMap(Arrays::stream)
                     .filter(serviceInfo -> serviceInfo.getName().equals(serviceName))
                     .findAny();
