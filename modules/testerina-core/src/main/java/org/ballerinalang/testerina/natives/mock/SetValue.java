@@ -18,19 +18,11 @@
 package org.ballerinalang.testerina.natives.mock;
 
 import org.ballerinalang.bre.Context;
-import org.ballerinalang.model.BLangPackage;
-import org.ballerinalang.model.BLangProgram;
-import org.ballerinalang.model.BallerinaConnectorDef;
-import org.ballerinalang.model.Connector;
-import org.ballerinalang.model.ParameterDef;
-import org.ballerinalang.model.Service;
-import org.ballerinalang.model.expressions.BasicLiteral;
-import org.ballerinalang.model.expressions.ConnectorInitExpr;
-import org.ballerinalang.model.expressions.Expression;
-import org.ballerinalang.model.statements.VariableDefStmt;
 import org.ballerinalang.model.types.BType;
 import org.ballerinalang.model.types.TypeEnum;
+import org.ballerinalang.model.values.BConnector;
 import org.ballerinalang.model.values.BValue;
+import org.ballerinalang.model.values.StructureType;
 import org.ballerinalang.natives.AbstractNativeFunction;
 import org.ballerinalang.natives.annotations.Argument;
 import org.ballerinalang.natives.annotations.Attribute;
@@ -38,6 +30,8 @@ import org.ballerinalang.natives.annotations.BallerinaAnnotation;
 import org.ballerinalang.natives.annotations.BallerinaFunction;
 import org.ballerinalang.testerina.core.TesterinaRegistry;
 import org.ballerinalang.testerina.core.TesterinaUtils;
+import org.ballerinalang.util.codegen.ProgramFile;
+import org.ballerinalang.util.codegen.ServiceInfo;
 import org.ballerinalang.util.exceptions.BallerinaException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,7 +39,6 @@ import org.slf4j.LoggerFactory;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.Optional;
-import java.util.Queue;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -74,15 +67,19 @@ import java.util.stream.Collectors;
                                                value = "Mock value to set (e.g.: endpoint URL)") })
 public class SetValue extends AbstractNativeFunction {
 
-    public static final String FIELD_NAME_VALUE = "value";
     private static final String COULD_NOT_FIND_MATCHING_CONNECTOR = "Could not find a matching connector for the name ";
 
     private static final String MSG_PREFIX = "mock:setValue: ";
     private static final String MOCK_PATH_SYNTAX = "<ServiceName>[.]<ConnectorVariableName(s)>[.]parameterX";
     private static final String MOCK_PATH_SYNTAX_EXAMPLE = "helloWorld.httpCon.parameter1";
+    private static final int INTEGER = 0;
+    private static final int FLOAT = 1;
+    private static final int BOOLEAN = 2;
+    private static final int STRING = 3;
 
     private static final Logger logger = LoggerFactory.getLogger(SetValue.class);
 
+    //TODO: Improve this to support modification of local variables as well
     @Override
     public BValue[] execute(Context ctx) {
 
@@ -102,89 +99,99 @@ public class SetValue extends AbstractNativeFunction {
         MockConnectorPath mockCnctrPath = parseMockConnectorPath(ctx);
 
         //Locate the relevant Application, Package, and the Service
-        Service service = getMatchingService(mockCnctrPath.serviceName);
+        ServiceInfo service = getMatchingService(mockCnctrPath.serviceName);
 
-        //traverse through the connectors and get the last connector instance
-        VariableDefStmt[] variableDefStmts = service.getVariableDefStmts();
         if (mockCnctrPath.connectorNames.size() < 1) {
             throw new BallerinaException(
                     "Connectors entered for the service " + mockCnctrPath.serviceName + " is empty." + ". Syntax: "
                             + MOCK_PATH_SYNTAX + ". Example: " + MOCK_PATH_SYNTAX_EXAMPLE);
         }
         String firstConnectorName = mockCnctrPath.connectorNames.pop();
-        VariableDefStmt variableDefStmt = Arrays.stream(variableDefStmts)
-                .filter(connector -> connector.getVariableDef().getName().equals(firstConnectorName)).findAny()
-                .orElse(null);
-        if (variableDefStmt == null) {
-            throw new BallerinaException(COULD_NOT_FIND_MATCHING_CONNECTOR + firstConnectorName);
-        }
-        variableDefStmt = getLastConnector(variableDefStmt, mockCnctrPath.connectorNames);
-        if (!(variableDefStmt.getRExpr() instanceof ConnectorInitExpr)) {
-            throw new BallerinaException(
-                    MSG_PREFIX + "The mock connector path argument contains values other than connector definitions "
-                            + mockCnctrPath.originalString);
-        }
 
-        //We are updating an argument in the last connector expression
-        Expression[] argExprs = ((ConnectorInitExpr) variableDefStmt.getRExpr()).getArgExprs();
+        StructureType globalMemBlock = ctx.getProgramFile().getGlobalMemoryBlock();
+        int nGlobalRefVars = ctx.getProgramFile().getGlobalVarIndexes()[5];
+        BConnector connector = null;
 
-        boolean isMockValueSet = false;
-        if (variableDefStmt.getVariableDef().getType() instanceof BallerinaConnectorDef) {
-            Connector balConDef = (Connector) variableDefStmt.getVariableDef().getType();
-            for (int i = 0; i < balConDef.getParameterDefs().length; i++) { //find in connector parameters
-                ParameterDef[] paraDef = balConDef.getParameterDefs();
-                //the # of parameters and # of arguments must match, and is ordered by the array index.
-                if (paraDef[i].getName().equals(mockCnctrPath.terminalVarName)) {
-                    setProperty(argExprs[i], mockCnctrPath.terminalVarName, mockCnctrPath.mockValue);
-                    isMockValueSet = true;
-                    break;
-                }
+        for (int i = 0; i < nGlobalRefVars; i++) {
+            if (globalMemBlock.getRefField(i) instanceof BConnector) {
+                connector = (BConnector) globalMemBlock.getRefField(i);
+                break;
             }
         }
-        //fall back to index based argument update based on the variable name.
-        if (!isMockValueSet) {
-            validateArgsExprsArray(mockCnctrPath.indexOfMockField, argExprs, variableDefStmt);
-            setProperty(argExprs[mockCnctrPath.indexOfMockField], mockCnctrPath.terminalVarName,
-                    mockCnctrPath.mockValue);
+
+        if (connector == null) {
+            throw new BallerinaException(COULD_NOT_FIND_MATCHING_CONNECTOR);
+        }
+
+        //TODO: Find a better way to do this
+        BType[] fieldTypes = connector.getFieldTypes();
+        int[] fieldTypeCount = new int[5];
+
+        for (int i = 0; i <= mockCnctrPath.indexOfMockField; i++) {
+            switch (fieldTypes[i].getName()) {
+                case "int":
+                    fieldTypeCount[INTEGER]++;
+                    break;
+                case "float":
+                    fieldTypeCount[FLOAT]++;
+                    break;
+                case "boolean":
+                    fieldTypeCount[BOOLEAN]++;
+                    break;
+                case "string":
+                    fieldTypeCount[STRING]++;
+                    break;
+                default:
+                    fieldTypeCount[4]++;
+                    break; // TODO: Improve this
+            }
+        }
+
+        switch (fieldTypes[mockCnctrPath.indexOfMockField].getName()) {
+            case "int":
+                connector.setIntField(fieldTypeCount[INTEGER] - 1, Integer.valueOf(mockCnctrPath.mockValue));
+                break;
+            case "float":
+                connector.setFloatField(fieldTypeCount[FLOAT] - 1, Double.valueOf(mockCnctrPath.mockValue));
+                break;
+            case "boolean":
+                connector.setBooleanField(fieldTypeCount[BOOLEAN] - 1, Integer.valueOf(mockCnctrPath.mockValue));
+                break;
+            case "string":
+                connector.setStringField(fieldTypeCount[STRING] - 1, mockCnctrPath.mockValue);
+                break;
+            default:
+                throw new BallerinaException(fieldTypes[mockCnctrPath.indexOfMockField].getName() +
+                                                     " type variables cannot be modified.");
         }
 
         return VOID_RETURN;
     }
 
-    private Service getMatchingService(String serviceName) {
-        Optional<Service> matchingService = Optional.empty();
-        for (BLangProgram bLangProgram : TesterinaRegistry.getInstance().getBLangPrograms()) {
-            // 1) First, we get the Service for the given serviceName from the original BLangProgram
-            matchingService = Arrays.stream(bLangProgram.getServicePackages()).map(BLangPackage::getServices)
-                    .flatMap(Arrays::stream).filter(s -> s.getName().equals(serviceName)).findAny();
+    private ServiceInfo getMatchingService(String serviceName) {
+        Optional<ServiceInfo> matchingService = Optional.empty();
+        for (ProgramFile programFile : TesterinaRegistry.getInstance().getProgramFiles()) {
+            // 1) First, we get the Service for the given serviceName from the original ProgramFile
+            matchingService = Arrays.stream(programFile.getServicePackageNameList())
+                    .map(sName -> programFile.getPackageInfo(sName).getServiceInfoList())
+                    .flatMap(Arrays::stream)
+                    .filter(serviceInfo -> serviceInfo.getName().equals(serviceName))
+                    .findAny();
         }
 
         // fail further processing if we can't find the application/service
         if (!matchingService.isPresent()) {
             // Added for user convenience. Since we are stopping further progression of the program,
             // perf overhead is ignored.
-            Set<String> servicesSet = TesterinaRegistry.getInstance().getBLangPrograms().stream()
-                    .map(BLangProgram::getServicePackages).flatMap(Arrays::stream).map(BLangPackage::getServices)
-                    .flatMap(Arrays::stream).map(Service::getName).collect(Collectors.toSet());
+            Set<String> servicesSet = TesterinaRegistry.getInstance().getProgramFiles().stream()
+                    .map(ProgramFile::getServicePackageNameList).flatMap(Arrays::stream)
+                    .collect(Collectors.toSet());
 
             throw new BallerinaException(MSG_PREFIX + "No matching service for the name '" + serviceName + "' found. "
                     + "Did you mean to include one of these services? " + servicesSet);
         }
 
         return matchingService.get();
-    }
-
-    private void validateArgsExprsArray(int indexOfMockField, Expression[] argExprs, VariableDefStmt finalVarDefStmt)
-            throws BallerinaException {
-        if (argExprs.length > indexOfMockField) {
-            return;
-        }
-
-        throw new BallerinaException(
-                MSG_PREFIX + "Index value should be less than the no. of arguments accepted by the connector '"
-                        + finalVarDefStmt.getVariableDef().getName() + "': " + argExprs.length + " but is: " + (
-                        indexOfMockField + 1) + ". Cannot update " + finalVarDefStmt.getVariableDef().getTypeName()
-                        .getName() + " connector's arguments.");
     }
 
     private MockConnectorPath parseMockConnectorPath(Context ctx) {
@@ -218,53 +225,6 @@ public class SetValue extends AbstractNativeFunction {
                 Arrays.asList(Arrays.copyOfRange(mockCntrPathArr, 1, mockCntrPathArr.length - 1)));
         return new MockConnectorPath(mockCntrPathString, mockCntrPathArr[0], connectorNamesList, paramName, mockValue,
                 indexOfMockField);
-    }
-
-    private VariableDefStmt getLastConnector(VariableDefStmt variableDefStmt, Queue<String> connectorNames) {
-        BType con = variableDefStmt.getVariableDef().getType();
-        String connectorNameToLookFor = connectorNames.poll();
-        if (connectorNameToLookFor == null) {
-            return variableDefStmt;
-        }
-
-        if (con instanceof BallerinaConnectorDef) {
-            variableDefStmt = Arrays.stream(((BallerinaConnectorDef) con).getVariableDefStmts())
-                    .filter(connector -> connector.getVariableDef().getName().equals(connectorNameToLookFor)).findAny()
-                    .orElse(null);
-
-            if (variableDefStmt == null) {
-                throw new BallerinaException(COULD_NOT_FIND_MATCHING_CONNECTOR + connectorNameToLookFor);
-            }
-            //        } else if (con instanceof AbstractNativeConnector) {
-            //todo use reflection to further traverse the tree
-            //1) via reflection, get the list of all global variables that are of type Connector
-            //2) verify the name I want is there.
-            //3) if it is there, then get that instance and recurse further.
-            //            throw new BallerinaException("error");
-        }
-
-        return getLastConnector(variableDefStmt, connectorNames);
-    }
-
-    private void setProperty(Expression argExpr, String terminalVarName, String mockValue) {
-        if (argExpr instanceof BasicLiteral) {
-            BValue bValue = ((BasicLiteral) argExpr).getBValue();
-            try {
-                TesterinaUtils.setProperty(bValue, terminalVarName, mockValue);
-            } catch (IllegalAccessException | NoSuchFieldException e) {
-                //retrying with the default name
-                try {
-                    TesterinaUtils.setProperty(bValue, FIELD_NAME_VALUE, mockValue);
-                } catch (IllegalAccessException | NoSuchFieldException e1) {
-                    throw new BallerinaException(
-                            "Error while updating the field " + terminalVarName + " to " + mockValue);
-                }
-            }
-        } else {
-            throw new BallerinaException("ballerina: We can only process {@BasicLiteral}s. " + terminalVarName
-                    + " is not a basic literal type");
-            // todo handle expression types other than basic literal
-        }
     }
 
     /**
