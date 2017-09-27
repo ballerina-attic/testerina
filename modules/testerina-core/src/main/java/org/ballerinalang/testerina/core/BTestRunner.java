@@ -44,7 +44,6 @@ public class BTestRunner {
 
     public static void runTest(Path[] sourceFilePaths) {
         BallerinaConnectorManager.getInstance().initialize(new MessageProcessor());
-        BallerinaConnectorManager.getInstance().initializeClientConnectors(new MessageProcessor());
 
         ProgramFile[] programFiles = Arrays.stream(sourceFilePaths).map(BTestRunner::buildTestModel)
                 .toArray(ProgramFile[]::new);
