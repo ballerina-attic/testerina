@@ -1,5 +1,9 @@
 # Testerina
 
+This repository is no longer used for development. Current developments are done in following repository.
+
+https://github.com/ballerina-lang/ballerina
+
 Testerina is the test framework built for the Ballerina language. This will be a part of ```ballerina-tools-<release-version>.zip``` distribution [1].
 
 Testerina provides ```ballerina test``` command.  
